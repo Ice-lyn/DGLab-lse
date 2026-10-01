@@ -1,0 +1,14 @@
+{
+    "name": "dglab-lse",
+    "version": "0.0.1",
+    "description": "DGLab LSE兼容",
+    "author": "冰凌呀",
+    "type": "module",
+    "main": "index.js",
+    "scripts": {
+        "start": "node index.js"
+    },
+    "dependencies": {
+        "ws": "^8.21.1"
+    }
+}
