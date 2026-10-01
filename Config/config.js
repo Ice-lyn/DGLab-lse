@@ -1,8 +1,12 @@
 export const config = {
     host: "0.0.0.0", // WS服务地址
     port: 18877, // WS服务端口
+
     outHost: "cn-hk-bgp-5.ofalias.net:24420", // 映射出去的ip，仅用于显示
     clientIdAhead: "minecraft-dglab-lse-", // 客户端ID前缀
+    clientIdCompression: true, // 客户端ID压缩，启用后可以用更少的id连接，低版本可能不支持？
+    clientIdCompressionAhead: "qysid-", // 使用ID压缩时使用的前缀
+
     heartbeatThreshold: 30, // 心跳触发阈值百分百
     syncChannels: true, // A/B 通道同步
     maxIntensity: 500, // 最大强度

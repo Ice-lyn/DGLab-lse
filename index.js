@@ -112,14 +112,39 @@ wss.on('connection', (ws, req) => {
         try {
             const msg = JSON.parse(data.toString());
 
-            // 处理 bind 响应
+            // === 处理 bind 响应 ===
             if (msg.type === 'bind' && msg.message === 'DGLAB') {
                 clientId = msg.clientId;
-                xuid = String(clientId.slice(config.clientIdAhead.length));
-                wsData = WSDataMap.get(xuid);
-                tellMsg = wsData?.tellMsg ?? ((...data) => mc.getPlayer(xuid.toString())?.tell(data.join()));
 
-                if (WSDataMap?.ws) {
+                // --- 通过前缀判断格式，解析出 xuid ---
+                let parsedXuid = null;
+
+                if (clientId.startsWith(config.clientIdCompressionAhead)) {
+                    // 压缩格式：qysid-<base62>
+                    if (!config.clientIdCompression) {
+                        logger.warn("收到压缩格式 clientId，但压缩未启用，已拒绝");
+                        return ws.close();
+                    }
+                    try {
+                        parsedXuid = String(decode(clientId.slice(config.clientIdCompressionAhead.length)));
+                    } catch (e) {
+                        logger.error("clientId 解码失败: " + e);
+                        return ws.close();
+                    }
+                } else if (clientId.startsWith(config.clientIdAhead)) {
+                    // 原始格式：<clientIdAhead><xuid>
+                    parsedXuid = clientId.slice(config.clientIdAhead.length);
+                } else {
+                    logger.warn("未知的 clientId 前缀: " + clientId);
+                    return ws.close();
+                }
+
+                xuid = parsedXuid;
+                wsData = WSDataMap.get(xuid);
+                tellMsg = wsData?.tellMsg ?? ((...d) => mc.getPlayer(xuid.toString())?.tell(d.join()));
+
+                // 原代码这里 WSDataMap?.ws 是无效判断，改成查当前 xuid
+                if (WSDataMap.get(xuid)?.ws) {
                     tellMsg("拒绝连接，链接已存在");
                     return ws.close();
                 }
@@ -127,7 +152,7 @@ wss.on('connection', (ws, req) => {
                 ws.send(JSON.stringify({
                     type: 'bind',
                     clientId: clientId,
-                    targetId: msg.clientId,  // App的clientId，虽然跟clientID长得一样啊，不知道文档为什么要写这个东西
+                    targetId: msg.clientId,
                     message: '200',
                     statusCode: 200
                 }));
@@ -142,12 +167,13 @@ wss.on('connection', (ws, req) => {
                 addHeartbeat(ws, xuid, tellMsg);
             }
 
-            // App的心跳
+            // === App 心跳 ===
             if (msg.type === 'heartbeat') {
+                const cur = WSDataMap.get(xuid);
                 ws.send(JSON.stringify({
                     type: 'heartbeat',
                     clientId: clientId,
-                    targetId: msg.clientId || WSDataMap.get(xuid).appClientId || '',
+                    targetId: msg.clientId || cur?.appClientId || '',
                     message: '200'
                 }));
             }
@@ -309,7 +335,9 @@ function addWSPlayer(xuid, tellMsg = () => { }) {
 
     // logger.info(typeof xuid);
 
-    const clientId = config.clientIdAhead + xuid;
+    const clientId = config.clientIdCompression
+        ? config.clientIdCompressionAhead + encode(xuid)
+        : config.clientIdAhead + xuid;
 
     WSDataMap.set(xuid, { tellMsg, clientId });
     tellMsg(`请通过 'ws://${config.outHost}/${clientId}' 连接`);
@@ -346,4 +374,29 @@ function addHeartbeat(ws, xuid, tellMsg = () => { }) {
             }
         }, 60 * 1000)
     );
+}
+
+// === 编码相关 === //
+const CHARS = '0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ';
+const BASE = 62n;
+
+function encode(numStr) {
+    let n = BigInt(numStr);
+    if (n === 0n) return '0';
+    let out = '';
+    while (n > 0n) {
+        out = CHARS[Number(n % BASE)] + out;
+        n /= BASE;
+    }
+    return out;
+}
+
+function decode(str) {
+    let n = 0n;
+    for (const c of str) {
+        const idx = CHARS.indexOf(c);
+        if (idx === -1) throw new Error('非法字符: ' + c);
+        n = n * BASE + BigInt(idx);
+    }
+    return n.toString();
 }
