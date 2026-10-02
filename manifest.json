@@ -2,7 +2,7 @@
     "name": "DGLab-lse",
     "entry": "index.js",
     "type": "lse-nodejs",
-    "version": "0.0.1",
+    "version": "0.0.2",
     "author": "冰凌呀",
     "description": "DGLab LSE兼容",
     "dependencies": [
